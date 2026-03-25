@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>双盲诗歌</title>
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --bg: #f7f4ee;
+      --card: #fffdf8;
+      --text: #2d2a26;
+      --muted: #7a746d;
+      --primary: #6c5ce7;
+      --primary-2: #8e7dff;
+      --border: #e8dfd2;
+      --danger: #d63031;
+      --ok: #0f9d58;
+      --shadow: 0 10px 30px rgba(0,0,0,.08);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(180deg, #faf6ef 0%, #f5efe6 100%);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 20px 16px 48px;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 800;
+      margin: 18px 0 8px;
+      letter-spacing: .5px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .row > * { flex: 1; }
+
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    input, textarea, select, button {
+      font: inherit;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 14px;
+      padding: 12px 14px;
+      color: var(--text);
+      outline: none;
+    }
+
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+      line-height: 1.7;
+    }
+
+    button {
+      border: none;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .btn-secondary {
+      background: #eee8ff;
+      color: #4b3ecf;
+    }
+
+    .btn-danger {
+      background: #ffe5e5;
+      color: var(--danger);
+    }
+
+    .muted { color: var(--muted); }
+    .small { font-size: 13px; }
+    .center { text-align: center; }
+    .hidden { display: none !important; }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      background: #f2edff;
+      color: #5646dd;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+
+    .poem-box {
+      background: #fff;
+      border: 1px dashed #d8cfbf;
+      border-radius: 16px;
+      padding: 16px;
+      line-height: 2;
+      white-space: pre-wrap;
+      min-height: 120px;
+    }
+
+    .status-ok { color: var(--ok); font-weight: 700; }
+    .status-wait { color: #c27c00; font-weight: 700; }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 800;
+      letter-spacing: 1px;
+      font-size: 22px;
+    }
+
+    .footer-note {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">双盲诗歌</div>
+    <div class="subtitle">两个人进入同一房间，轮流各写一句。在揭晓前，谁也看不到对方写的内容。</div>
+
+    <div id="configCard" class="card">
+      <label>1. 先配置 Supabase</label>
+      <div class="row">
+        <div>
+          <label for="supabaseUrl">SUPABASE_URL</label>
+          <input id="supabaseUrl" placeholder="https://xxxx.supabase.co" />
+        </div>
+        <div>
+          <label for="supabaseAnonKey">SUPABASE_ANON_KEY</label>
+          <input id="supabaseAnonKey" placeholder="匿名公钥 anon key" />
+        </div>
+      </div>
+      <div style="margin-top: 12px;">
+        <button class="btn-secondary" onclick="saveConfig()">保存配置到本地</button>
+      </div>
+      <div class="small muted" style="margin-top: 10px;">第一次使用时填写，之后会保存在浏览器本地。部署到 GitHub Pages 后也能用。</div>
+    </div>
+
+    <div id="authCard" class="card hidden">
+      <label>2. 输入昵称</label>
+      <input id="nickname" maxlength="12" placeholder="例如：木木" />
+      <div style="margin-top: 12px;" class="row">
+        <button class="btn-primary" onclick="createRoom()">创建房间</button>
+        <button class="btn-secondary" onclick="showJoin()">加入房间</button>
+      </div>
+      <div id="joinBox" class="hidden" style="margin-top: 12px;">
+        <input id="joinCode" maxlength="6" placeholder="输入 6 位邀请码" style="text-transform: uppercase;" />
+        <div style="margin-top: 10px;">
+          <button class="btn-primary" onclick="joinRoom()">确认加入</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="roomCard" class="card hidden">
+      <div class="topbar">
+        <div>
+          <div class="small muted">房间邀请码</div>
+          <div id="roomCode" class="code">------</div>
+        </div>
+        <button class="btn-danger" onclick="leaveRoom()">退出房间</button>
+      </div>
+      <div>
+        <span id="playerRole" class="pill">身份：-</span>
+        <span id="roundInfo" class="pill">第 1 / 4 轮</span>
+        <span id="roomStatus" class="pill">等待中</span>
+      </div>
+      <div id="playersInfo" class="small muted" style="margin-top: 8px;">当前房间成员：-</div>
+      <div id="themeInfo" class="small muted" style="margin-top: 4px;">主题：自由创作</div>
+    </div>
+
+    <div id="writeCard" class="card hidden">
+      <label id="writeLabel">写下这一轮的句子</label>
+      <textarea id="lineInput" maxlength="80" placeholder="请输入一句诗，提交后本轮不可修改"></textarea>
+      <div class="small muted" style="margin-top: 8px;">每轮最多 80 字。提交后进入等待状态，直到对方也提交。</div>
+      <div style="margin-top: 12px;" class="row">
+        <button class="btn-primary" onclick="submitLine()">提交这一句</button>
+        <button class="btn-secondary" onclick="refreshState()">刷新状态</button>
+      </div>
+      <div id="submitStatus" class="small" style="margin-top: 10px;"></div>
+    </div>
+
+    <div id="waitingCard" class="card hidden center">
+      <div class="title" style="font-size: 22px; margin-top: 0;">等待对方完成本轮</div>
+      <div class="subtitle" style="margin-bottom: 10px;">你已经提交了本轮诗句。双盲模式下，暂时不会显示对方的内容。</div>
+      <button class="btn-secondary" onclick="refreshState()">刷新状态</button>
+    </div>
+
+    <div id="revealCard" class="card hidden">
+      <div class="topbar">
+        <div>
+          <div class="title" style="font-size: 22px; margin: 0;">揭晓结果</div>
+          <div class="small muted">全部轮次完成后显示完整诗歌</div>
+        </div>
+        <button id="revealBtn" class="btn-primary" onclick="revealPoem()">揭晓</button>
+      </div>
+      <label>交错合成版</label>
+      <div id="mixedPoem" class="poem-box"></div>
+      <div class="row" style="margin-top: 14px;">
+        <div>
+          <label>A 的句子</label>
+          <div id="poemA" class="poem-box"></div>
+        </div>
+        <div>
+          <label>B 的句子</label>
+          <div id="poemB" class="poem-box"></div>
+        </div>
+      </div>
+      <div style="margin-top: 12px;" class="row">
+        <button class="btn-secondary" onclick="copyResult()">复制结果</button>
+        <button class="btn-secondary" onclick="restartRoom()">再来一局</button>
+      </div>
+    </div>
+
+    <div class="footer-note">建议通过微信直接分享这个页面链接给同学使用。</div>
+  </div>
+
+  <script>
+    let supabaseClient = null;
+    let state = {
+      room: null,
+      player: null,
+      players: [],
+      lines: [],
+      subscription: null,
+    };
+
+    const LOCAL_KEY = 'blind_poetry_local';
+
+    function $(id) {
+      return document.getElementById(id);
+    }
+
+    function saveLocal(data) {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify({
+        ...JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}'),
+        ...data,
+      }));
+    }
+
+    function getLocal() {
+      return JSON.parse(localStorage.getItem(LOCAL_KEY) || '{}');
+    }
+
+    function randomCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let s = '';
+      for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+      return s;
+    }
+
+    function show(id, visible = true) {
+      $(id).classList.toggle('hidden', !visible);
+    }
+
+    function showJoin() {
+      show('joinBox', true);
+    }
+
+    function initFromLocal() {
+      const local = getLocal();
+      if (local.supabaseUrl) $('supabaseUrl').value = local.supabaseUrl;
+      if (local.supabaseAnonKey) $('supabaseAnonKey').value = local.supabaseAnonKey;
+      if (local.nickname) $('nickname').value = local.nickname;
+      if (local.roomCode) $('joinCode').value = local.roomCode;
+
+      if (local.supabaseUrl && local.supabaseAnonKey) {
+        connectSupabase(local.supabaseUrl, local.supabaseAnonKey);
+      }
+    }
+
+    function saveConfig() {
+      const supabaseUrl = $('supabaseUrl').value.trim();
+      const supabaseAnonKey = $('supabaseAnonKey').value.trim();
+      if (!supabaseUrl || !supabaseAnonKey) {
+        alert('请先填写 Supabase URL 和 anon key');
+        return;
+      }
+      saveLocal({ supabaseUrl, supabaseAnonKey });
+      connectSupabase(supabaseUrl, supabaseAnonKey);
+      alert('配置已保存');
+    }
+
+    function connectSupabase(url, key) {
+      supabaseClient = window.supabase.createClient(url, key);
+      show('authCard', true);
+    }
+
+    async function createRoom() {
+      try {
+        const nickname = $('nickname').value.trim();
+        if (!nickname) return alert('请先输入昵称');
+        saveLocal({ nickname });
+
+        let code = randomCode();
+        for (let i = 0; i < 5; i++) {
+          const { data: existing } = await supabaseClient
+            .from('rooms')
+            .select('id')
+            .eq('code', code)
+            .maybeSingle();
+          if (!existing) break;
+          code = randomCode();
+        }
+
+        const { data: room, error: roomError } = await supabaseClient
+          .from('rooms')
+          .insert({
+            code,
+            theme: '自由创作',
+            total_rounds: 4,
+            current_round: 1,
+            status: 'waiting',
+            revealed: false,
+          })
+          .select()
+          .single();
+
+        if (roomError) throw roomError;
+
+        const { data: player, error: playerError } = await supabaseClient
+          .from('players')
+          .insert({
+            room_id: room.id,
+            nickname,
+            role: 'A',
+          })
+          .select()
+          .single();
+
+        if (playerError) throw playerError;
+
+        state.room = room;
+        state.player = player;
+        saveLocal({ roomId: room.id, playerId: player.id, roomCode: room.code });
+        await enterRoom();
+      } catch (e) {
+        console.error(e);
+        alert('创建房间失败：' + e.message);
+      }
+    }
+
+    async function joinRoom() {
+      try {
+        const nickname = $('nickname').value.trim();
+        const code = $('joinCode').value.trim().toUpperCase();
+        if (!nickname) return alert('请先输入昵称');
+        if (!code) return alert('请输入邀请码');
+        saveLocal({ nickname, roomCode: code });
+
+        const { data: room, error: roomError } = await supabaseClient
+          .from('rooms')
+          .select('*')
+          .eq('code', code)
+          .maybeSingle();
+
+        if (roomError) throw roomError;
+        if (!room) return alert('房间不存在');
+
+        const { data: existingPlayers, error: playersError } = await supabaseClient
+          .from('players')
+          .select('*')
+          .eq('room_id', room.id)
+          .order('created_at', { ascending: true });
+
+        if (playersError) throw playersError;
+        if (existingPlayers.length >= 2) return alert('房间已满');
+
+        const role = existingPlayers.some(p => p.role === 'A') ? 'B' : 'A';
+
+        const { data: player, error: playerError } = await supabaseClient
+          .from('players')
+          .insert({ room_id: room.id, nickname, role })
+          .select()
+          .single();
+
+        if (playerError) throw playerError;
+
+        await supabaseClient
+          .from('rooms')
+          .update({ status: 'playing' })
+          .eq('id', room.id);
+
+        state.room = room;
+        state.player = player;
+        saveLocal({ roomId: room.id, playerId: player.id, roomCode: room.code });
+        await enterRoom();
+      } catch (e) {
+        console.error(e);
+        alert('加入房间失败：' + e.message);
+      }
+    }
+
+    async function enterRoom() {
+      show('configCard', false);
+      show('authCard', false);
+      show('roomCard', true);
+      await refreshState();
+      subscribeRoom();
+    }
+
+    function subscribeRoom() {
+      if (!state.room || !supabaseClient) return;
+      if (state.subscription) {
+        supabaseClient.removeChannel(state.subscription);
+      }
+      state.subscription = supabaseClient
+        .channel('room-' + state.room.id)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${state.room.id}` }, refreshState)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${state.room.id}` }, refreshState)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'lines', filter: `room_id=eq.${state.room.id}` }, refreshState)
+        .subscribe();
+    }
+
+    async function refreshState() {
+      try {
+        const local = getLocal();
+        const roomId = state.room?.id || local.roomId;
+        const playerId = state.player?.id || local.playerId;
+        if (!roomId || !playerId || !supabaseClient) return;
+
+        const [{ data: room }, { data: player }, { data: players }, { data: lines }] = await Promise.all([
+          supabaseClient.from('rooms').select('*').eq('id', roomId).single(),
+          supabaseClient.from('players').select('*').eq('id', playerId).single(),
+          supabaseClient.from('players').select('*').eq('room_id', roomId).order('created_at', { ascending: true }),
+          supabaseClient.from('lines').select('*').eq('room_id', roomId).order('round_no', { ascending: true }).order('created_at', { ascending: true }),
+        ]);
+
+        state.room = room;
+        state.player = player;
+        state.players = players || [];
+        state.lines = lines || [];
+        render();
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function render() {
+      if (!state.room || !state.player) return;
+      show('roomCard', true);
+
+      $('roomCode').textContent = state.room.code;
+      $('playerRole').textContent = `身份：${state.player.role}`;
+      $('roundInfo').textContent = `第 ${state.room.current_round} / ${state.room.total_rounds} 轮`;
+      $('roomStatus').textContent = `状态：${state.room.status}`;
+      $('themeInfo').textContent = `主题：${state.room.theme || '自由创作'}`;
+      $('playersInfo').textContent = `当前房间成员：${state.players.map(p => p.role + ' - ' + p.nickname).join('，') || '-'}`;
+
+      const currentRound = state.room.current_round;
+      const myRoundLine = state.lines.find(l => l.player_id === state.player.id && l.round_no === currentRound);
+      const roundLines = state.lines.filter(l => l.round_no === currentRound);
+      const bothJoined = state.players.length === 2;
+      const bothSubmitted = roundLines.length >= 2;
+      const gameFinished = state.room.status === 'finished';
+
+      show('writeCard', false);
+      show('waitingCard', false);
+      show('revealCard', false);
+
+      if (!bothJoined) {
+        show('waitingCard', true);
+        $('waitingCard').querySelector('.subtitle').textContent = '房间还没有满员，请把邀请码发给你的同学。';
+        return;
+      }
+
+      if (gameFinished) {
+        show('revealCard', true);
+        if (state.room.revealed) fillPoems();
+        else {
+          $('mixedPoem').textContent = '全部轮次已结束，点击“揭晓”显示完整结果。';
+          $('poemA').textContent = '';
+          $('poemB').textContent = '';
+        }
+        return;
+      }
+
+      if (myRoundLine) {
+        show('waitingCard', true);
+        $('waitingCard').querySelector('.subtitle').textContent = bothSubmitted
+          ? '本轮双方都已提交，系统将进入下一轮。若未自动更新，请点刷新。'
+          : '你已经提交了本轮诗句，正在等待对方提交。';
+      } else {
+        show('writeCard', true);
+        $('lineInput').value = '';
+        $('submitStatus').textContent = '';
+      }
+    }
+
+    async function submitLine() {
+      try {
+        const content = $('lineInput').value.trim();
+        if (!content) return alert('请先输入一句诗');
+        if (content.length > 80) return alert('请控制在 80 字以内');
+
+        const currentRound = state.room.current_round;
+        const already = state.lines.find(l => l.player_id === state.player.id && l.round_no === currentRound);
+        if (already) return alert('你已经提交过这一轮');
+
+        const { error } = await supabaseClient
+          .from('lines')
+          .insert({
+            room_id: state.room.id,
+            player_id: state.player.id,
+            role: state.player.role,
+            round_no: currentRound,
+            content,
+          });
+
+        if (error) throw error;
+
+        $('submitStatus').textContent = '提交成功';
+        $('submitStatus').className = 'small status-ok';
+
+        await advanceRoundIfNeeded(currentRound);
+        await refreshState();
+      } catch (e) {
+        console.error(e);
+        $('submitStatus').textContent = '提交失败：' + e.message;
+        $('submitStatus').className = 'small';
+      }
+    }
+
+    async function advanceRoundIfNeeded(roundNo) {
+      const { data: roundLines, error } = await supabaseClient
+        .from('lines')
+        .select('*')
+        .eq('room_id', state.room.id)
+        .eq('round_no', roundNo);
+      if (error) throw error;
+
+      if (roundLines.length < 2) return;
+
+      if (roundNo >= state.room.total_rounds) {
+        await supabaseClient
+          .from('rooms')
+          .update({ status: 'finished' })
+          .eq('id', state.room.id);
+      } else {
+        await supabaseClient
+          .from('rooms')
+          .update({ current_round: roundNo + 1, status: 'playing' })
+          .eq('id', state.room.id)
+          .eq('current_round', roundNo);
+      }
+    }
+
+    async function revealPoem() {
+      await supabaseClient
+        .from('rooms')
+        .update({ revealed: true })
+        .eq('id', state.room.id);
+      await refreshState();
+    }
+
+    function fillPoems() {
+      const linesA = state.lines.filter(l => l.role === 'A').sort((a, b) => a.round_no - b.round_no);
+      const linesB = state.lines.filter(l => l.role === 'B').sort((a, b) => a.round_no - b.round_no);
+      const aText = linesA.map(l => `【${l.round_no}】${l.content}`).join('\n');
+      const bText = linesB.map(l => `【${l.round_no}】${l.content}`).join('\n');
+
+      const mixed = [];
+      const maxLen = Math.max(linesA.length, linesB.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (linesA[i]) mixed.push(linesA[i].content);
+        if (linesB[i]) mixed.push(linesB[i].content);
+      }
+
+      $('poemA').textContent = aText || '暂无';
+      $('poemB').textContent = bText || '暂无';
+      $('mixedPoem').textContent = mixed.join('\n') || '暂无';
+    }
+
+    async function restartRoom() {
+      if (!confirm('确定在当前房间再来一局吗？将清空旧诗句。')) return;
+      await supabaseClient.from('lines').delete().eq('room_id', state.room.id);
+      await supabaseClient
+        .from('rooms')
+        .update({ current_round: 1, status: 'playing', revealed: false })
+        .eq('id', state.room.id);
+      await refreshState();
+    }
+
+    async function leaveRoom() {
+      const local = getLocal();
+      saveLocal({ roomId: null, playerId: null, roomCode: '' });
+      if (state.subscription && supabaseClient) {
+        supabaseClient.removeChannel(state.subscription);
+      }
+      state = { room: null, player: null, players: [], lines: [], subscription: null };
+      show('configCard', true);
+      show('authCard', true);
+      show('roomCard', false);
+      show('writeCard', false);
+      show('waitingCard', false);
+      show('revealCard', false);
+      $('joinCode').value = '';
+    }
+
+    async function copyResult() {
+      const text = [
+        `双盲诗歌｜房间 ${state.room.code}`,
+        '',
+        '交错合成版：',
+        $('mixedPoem').textContent,
+        '',
+        'A：',
+        $('poemA').textContent,
+        '',
+        'B：',
+        $('poemB').textContent,
+      ].join('\n');
+      await navigator.clipboard.writeText(text);
+      alert('已复制到剪贴板');
+    }
+
+    initFromLocal();
+  </script>
+</body>
+</html>
